@@ -3,4 +3,4 @@
   publish = "out"
 
 [build.environment]
-  NODE_VERSION = "16"  # Replace with your preferred Node version
+  NODE_VERSION = "18.17.0"  # Replace with your preferred Node version
