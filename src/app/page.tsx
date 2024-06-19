@@ -1,8 +1,19 @@
+// src/app/page.tsx
 "use client";
 
-import { useState, useEffect, Key } from 'react';
-import { Job } from './services/fetchJobs';
+import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+
+interface Job {
+  url: string;
+  nameWithLink: string;
+  lastDate: string;
+  notificationLinks?: string[];
+  publishedDate?: string;
+  applyLinks?: string[];
+  daysLeft?: number;
+  applied?: boolean;
+}
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -14,19 +25,13 @@ export default function Home() {
     const fetchJobs = async () => {
       try {
         const response = await fetch('/api/fetchJobs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch jobs');
-        }
+        if (!response.ok) throw new Error('Failed to fetch jobs');
         const jobsData: Job[] = await response.json();
         const appliedJobs = JSON.parse(localStorage.getItem('appliedJobs') || '{}');
-        const updatedJobs = jobsData.map(job => ({
-          ...job,
-          applied: appliedJobs[job.url] || false,
-        }));
+        const updatedJobs = jobsData.map(job => ({ ...job, applied: appliedJobs[job.url] || false }));
         setJobs(updatedJobs);
       } catch (error) {
         console.error('Failed to fetch jobs:', error);
-        // Optionally handle error state or retry mechanism
       } finally {
         setLoading(false);
       }
@@ -35,7 +40,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const appliedJobs = jobs.reduce((acc: any, job: any) => {
+    const appliedJobs = jobs.reduce((acc:any, job) => {
       acc[job.url] = job.applied || false;
       return acc;
     }, {});
@@ -51,33 +56,25 @@ export default function Home() {
   };
 
   const toggleApplied = (url: string) => {
-    const updatedJobs = jobs.map(job => {
-      if (job.url === url) {
-        return { ...job, applied: !job.applied };
-      }
-      return job;
-    });
+    const updatedJobs = jobs.map(job => (job.url === url ? { ...job, applied: !job.applied } : job));
     setJobs(updatedJobs);
   };
 
   const toggleAllApplied = () => {
     const allApplied = jobs.every(job => job.applied);
-    const updatedJobs = jobs.map(job => ({
-      ...job,
-      applied: !allApplied,
-    }));
+    const updatedJobs = jobs.map(job => ({ ...job, applied: !allApplied }));
     setJobs(updatedJobs);
   };
 
   const exportToExcel = () => {
-    const exportData = jobs.map((job) => ({
+    const exportData = jobs.map(job => ({
       '#': '',
       'Job Name': { v: job.nameWithLink.replace(/<[^>]+>/g, ''), l: { Target: job.url, Tooltip: job.nameWithLink.replace(/<[^>]+>/g, '') } },
       'Post Date': job.publishedDate !== 'NA' ? job.publishedDate : '',
       'Last Date to Apply': job.lastDate !== 'NA' ? job.lastDate : '',
       'Days Left': job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) ? job.daysLeft : '',
-      'Notifications': job.notificationLinks ? job.notificationLinks.map((link: any) => link.replace(/<[^>]+>/g, '')).join(': ') : '',
-      'Apply': job.applyLinks ? job.applyLinks.map((link: any) => link.replace(/<[^>]+>/g, '')).join(': ') : '',
+      'Notifications': job.notificationLinks ? job.notificationLinks.map(link => link.replace(/<[^>]+>/g, '')).join(': ') : '',
+      'Apply': job.applyLinks ? job.applyLinks.map(link => link.replace(/<[^>]+>/g, '')).join(': ') : '',
       'Applied': job.applied ? 'Yes' : 'No',
     }));
 
@@ -93,18 +90,14 @@ export default function Home() {
 
   const sortedJobs = [...jobs];
   if (sortConfig !== null) {
-    sortedJobs.sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? -1 : 1;
-      }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? 1 : -1;
-      }
+    sortedJobs.sort((a:any, b:any) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
   }
 
-  const filteredJobs = sortedJobs.filter((job) => {
+  const filteredJobs = sortedJobs.filter(job => {
     const queryTokens = searchQuery.toLowerCase().split(' ').filter(token => token.trim() !== '');
     return queryTokens.every(token =>
       job.nameWithLink.toLowerCase().includes(token) ||
@@ -116,9 +109,7 @@ export default function Home() {
 
   return (
     <main className="container mx-auto p-4 border border-gray-300 dark:border-gray-700 rounded-lg shadow-md dark:bg-gray-900">
-      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100 text-center">
-        Latest Job Listings
-      </h1>
+      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100 text-center">Latest Job Listings</h1>
       <div className="mb-4 flex justify-between items-center">
         <input
           type="text"
@@ -138,9 +129,7 @@ export default function Home() {
         <table className="w-full bg-white dark:bg-gray-800 border-collapse">
           <thead>
             <tr>
-              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
-                #
-              </th>
+              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">#</th>
               <th
                 className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer"
                 onClick={() => handleSort('nameWithLink')}
@@ -169,12 +158,8 @@ export default function Home() {
                 Days Left
                 {sortConfig?.key === 'daysLeft' && (sortConfig.direction === 'asc' ? ' ▲' : ' ▼')}
               </th>
-              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Notifications
-              </th>
-              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Apply
-              </th>
+              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Notifications</th>
+              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Apply</th>
               <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Applied
                 <span className="ml-2 flex items-center cursor-pointer">
@@ -191,43 +176,20 @@ export default function Home() {
           <tbody>
             {filteredJobs.map((job, index) => (
               <tr key={index} className={`${job.applied ? 'dark:text-gray-700' : ''}`}>
+                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">{index + 1}</td>
+                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900" dangerouslySetInnerHTML={{ __html: job.nameWithLink }}></td>
+                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">{job.publishedDate !== 'NA' ? job.publishedDate : ''}</td>
+                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">{job.lastDate !== 'NA' ? job.lastDate : ''}</td>
+                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">{job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) ? job.daysLeft : ''}</td>
                 <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {index + 1}
-                </td>
-                <td
-                  className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900"
-                  dangerouslySetInnerHTML={{ __html: job.nameWithLink }}
-                ></td>
-                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {job.publishedDate !== 'NA' ? job.publishedDate : ''}
-                </td>
-                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {job.lastDate !== 'NA' ? job.lastDate : ''}
+                  {job.notificationLinks ? job.notificationLinks.map((notificationLink, idx) => (
+                    <div key={idx} dangerouslySetInnerHTML={{ __html: notificationLink }} />
+                  )) : ''}
                 </td>
                 <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) ? job.daysLeft : ''}
-                </td>
-                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {job.notificationLinks ? (
-                    <div>
-                      {job.notificationLinks.map((notificationLink: any, idx: Key | null | undefined) => (
-                        <div key={idx} dangerouslySetInnerHTML={{ __html: notificationLink }} />
-                      ))}
-                    </div>
-                  ) : (
-                    ''
-                  )}
-                </td>
-                <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
-                  {job.applyLinks ? (
-                    <div>
-                      {job.applyLinks.map((applyLink: any, idx: Key | null | undefined) => (
-                        <div key={idx} dangerouslySetInnerHTML={{ __html: applyLink }} />
-                      ))}
-                    </div>
-                  ) : (
-                    ''
-                  )}
+                  {job.applyLinks ? job.applyLinks.map((applyLink, idx) => (
+                    <div key={idx} dangerouslySetInnerHTML={{ __html: applyLink }} />
+                  )) : ''}
                 </td>
                 <td className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
                   <input
@@ -243,9 +205,7 @@ export default function Home() {
       </div>
       {loading && (
         <div className="mt-4 flex justify-center">
-          <div className="text-gray-900 dark:text-gray-100 text-lg font-semibold">
-            Loading, Please wait....
-          </div>
+          <div className="text-gray-900 dark:text-gray-100 text-lg font-semibold">Loading, Please wait...</div>
         </div>
       )}
     </main>
