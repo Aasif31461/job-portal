@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Key } from 'react';
-import { Job } from './services/fetchJobs';
+import { Job, fetchAndParseJobs } from './services/fetchJobs';
 import * as XLSX from 'xlsx';
 
 export default function Home() {
@@ -13,11 +13,7 @@ export default function Home() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await fetch('/api/fetchJobs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch jobs');
-        }
-        const jobsData: Job[] = await response.json();
+        const jobsData: Job[] = await fetchAndParseJobs();
         const appliedJobs = JSON.parse(localStorage.getItem('appliedJobs') || '{}');
         const updatedJobs = jobsData.map(job => ({
           ...job,
