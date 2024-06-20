@@ -14,7 +14,18 @@ export interface Job {
   applied?: boolean;
 }
 
+// Simple in-memory cache
+let cache: { jobs: Job[], timestamp: number } | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // Cache duration in milliseconds (5 minutes)
+
 const fetchAndParseJobs = async (): Promise<Job[]> => {
+  const currentTime = new Date().getTime();
+
+  // Return cached data if within cache duration
+  if (cache && currentTime - cache.timestamp < CACHE_DURATION) {
+    return cache.jobs;
+  }
+
   const url = 'https://www.sarkariresult.com/latestjob/';
   const response = await axios.get(url);
   const html = response.data;
@@ -31,22 +42,32 @@ const fetchAndParseJobs = async (): Promise<Job[]> => {
     );
   });
 
-  for (const job of filteredJobs) {
+  // Fetch detailed job data in parallel batches
+  const jobDetailsPromises = filteredJobs.map(async (job) => {
     const jobHtml = await axios.get(job.url).then(res => res.data);
-    job.applyLinks = fetchApplyLink(jobHtml);
-    job.daysLeft = calculateDaysLeft(job.lastDate);
-    job.notificationLinks = fetchApplyNotificationLink(jobHtml);
-    job.publishedDate = fetchPublishedDate(jobHtml);
-  }
+    return {
+      ...job,
+      applyLinks: fetchApplyLink(jobHtml),
+      daysLeft: calculateDaysLeft(job.lastDate),
+      notificationLinks: fetchApplyNotificationLink(jobHtml),
+      publishedDate: fetchPublishedDate(jobHtml)
+    };
+  });
 
-  filteredJobs.sort((a, b) => {
+  const detailedJobs = await Promise.all(jobDetailsPromises);
+
+  detailedJobs.sort((a, b) => {
     const dateA = parseDate(a.lastDate);
     const dateB = parseDate(b.lastDate);
     if (isNaN(dateA.getTime())) return 1;
     if (isNaN(dateB.getTime())) return -1;
     return dateA.getTime() - dateB.getTime();
   });
-  return filteredJobs;
+
+  // Update cache
+  cache = { jobs: detailedJobs, timestamp: currentTime };
+
+  return detailedJobs;
 };
 
 const parseDate = (dateString: string): Date => {
@@ -70,26 +91,16 @@ const fetchApplyLink = (html: string): any => {
   const document = dom.window.document;
   let applyLinks: string[] = [];
 
-  // Find all <tr> elements in the document
   const trElements = document.querySelectorAll('tr');
-
-  // Loop through each <tr> element to find "Apply Online"
   trElements.forEach((tr) => {
     const tdElements = tr.querySelectorAll('td');
-    // Check if the first <td> contains "Apply Online"
     if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Apply Online')) {
-      // Find all <a> elements within the second <td>
       const applyLinkElements = tdElements[1].querySelectorAll('a');
-      if (applyLinkElements.length > 0) {
-        // Loop through each <a> element and construct applyLink strings
-        applyLinkElements.forEach((applyLinkElement) => {
-          const href = applyLinkElement.getAttribute('href') || '';
-          const text = applyLinkElement.textContent?.trim() || '';
-
-          // Create the applyLink string with clickable text
-          applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
-        });
-      }
+      applyLinkElements.forEach((applyLinkElement) => {
+        const href = applyLinkElement.getAttribute('href') || '';
+        const text = applyLinkElement.textContent?.trim() || '';
+        applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
+      });
     }
   });
 
@@ -101,51 +112,21 @@ const fetchApplyNotificationLink = (html: string): any => {
   const document = dom.window.document;
   let applyLinks: string[] = [];
 
-  // Find all <tr> elements in the document
   const trElements = document.querySelectorAll('tr');
-
-  // Loop through each <tr> element to find "Apply Online"
   trElements.forEach((tr) => {
     const tdElements = tr.querySelectorAll('td');
-    // Check if the first <td> contains "Apply Online"
     if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Download') && tdElements[0].textContent?.includes('Notification')) {
-      // Find all <a> elements within the second <td>
       const applyLinkElements = tdElements[1].querySelectorAll('a');
-      if (applyLinkElements.length > 0) {
-        // Loop through each <a> element and construct applyLink strings
-        applyLinkElements.forEach((applyLinkElement) => {
-          const href = applyLinkElement.getAttribute('href') || '';
-          const text = applyLinkElement.textContent?.trim() || '';
-
-          // Create the applyLink string with clickable text
-          applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
-        });
-      }
+      applyLinkElements.forEach((applyLinkElement) => {
+        const href = applyLinkElement.getAttribute('href') || '';
+        const text = applyLinkElement.textContent?.trim() || '';
+        applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
+      });
     }
   });
 
   return applyLinks;
 };
-
-
-
-// const fetchApplyNotificationLink = (html: string): string => {
-//   const dom = new JSDOM(html);
-//   const document = dom.window.document;
-//   let applyLink = '';
-
-//   document.querySelectorAll('tr').forEach(tr => {
-//     if (tr.textContent?.includes('Download') && tr.textContent?.includes('Notification')) {
-//       const link = tr.querySelector('a[href]')?.getAttribute('href');
-//       if (link) {
-//         applyLink = link;
-//         return;
-//       }
-//     }
-//   });
-
-//   return applyLink;
-// };
 
 function fetchPublishedDate(html: string): string {
   const dom = new JSDOM(html);
@@ -153,13 +134,9 @@ function fetchPublishedDate(html: string): string {
   let formattedDate = '';
 
   const tbody = document.querySelector('tbody');
-
-  if (!tbody) {
-    return formattedDate;
-  }
+  if (!tbody) return formattedDate;
 
   const trElements = tbody.querySelectorAll('tr');
-
   trElements.forEach((tr) => {
     const tdElements = tr.querySelectorAll('td');
     if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Post Date / Update:')) {
@@ -194,15 +171,15 @@ function getMonthNumber(monthName: string): string {
 
 const calculateDaysLeft = (lastDate: string): number | undefined => {
   if (!lastDate) return undefined;
-  
+
   const parts = lastDate.split('/');
   if (parts.length !== 3) return undefined;
-  
+
   const endDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
   const today = new Date();
   const diffTime = endDate.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+
   return diffDays;
 };
 
