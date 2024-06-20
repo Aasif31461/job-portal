@@ -6,7 +6,7 @@
   directory = "netlify/functions"
 
 [functions."fetchJobs"]
-  timeout = 30
+  timeout = 120  # Increased timeout to 120 seconds
 
 [[redirects]]
   from = "/api/*"
