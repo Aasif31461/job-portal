@@ -545,14 +545,17 @@ video {
 .ml-4 {
   margin-left: 1rem;
 }
-.mt-4 {
-  margin-top: 1rem;
+.mt-20 {
+  margin-top: 5rem;
 }
 .flex {
   display: flex;
 }
 .table {
   display: table;
+}
+.min-h-96 {
+  min-height: 24rem;
 }
 .w-full {
   width: 100%;
