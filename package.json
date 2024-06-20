@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently \"next dev\" \"npm run express\"",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "express": "node express-server/server.js"
   },
   "dependencies": {
     "autoprefixer": "^10.4.19",
     "axios": "^1.7.2",
+    "concurrently": "^8.2.2",
+    "http-proxy-middleware": "^3.0.0",
     "jsdom": "^24.1.0",
     "lodash": "^4.17.21",
     "next": "14.2.4",
