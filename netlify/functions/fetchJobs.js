@@ -5,6 +5,7 @@ exports.handler = async function(event, context) {
   try {
     const url = 'https://www.sarkariresult.com/latestjob/';
     const response = await axios.get(url);
+    console.log('Fetched HTML:', response.data.substring(0, 100));
     const html = response.data;
     const jobs = parseJobsFromHtml(html);
     const currentYear = new Date().getFullYear();

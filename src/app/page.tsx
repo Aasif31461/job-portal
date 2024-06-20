@@ -24,7 +24,7 @@ export default function Home() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await fetch('/api/fetchJobs');
+        const response = await fetch('/.netlify/functions/fetchJobs');
         if (!response.ok) throw new Error('Failed to fetch jobs');
         const jobsData: Job[] = await response.json();
         const appliedJobs = JSON.parse(localStorage.getItem('appliedJobs') || '{}');
