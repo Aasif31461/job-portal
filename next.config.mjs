@@ -1,6 +1,3 @@
-// next.config.js
-const { createProxyMiddleware } = require('http-proxy-middleware');
-
 const nextConfig = {
   async rewrites() {
     return [
