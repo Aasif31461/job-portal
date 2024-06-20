@@ -21,8 +21,8 @@ app.get('/api/fetchJobs', async (req, res) => {
       const jobNameYear = extractYearFromJobName(job.nameWithLink);
       console.log(jobNameYear)
       return (
-        (lastDate !== 'Invalid Date' && year.length === 4 && new Date(lastDate) >= new Date()) ||
-        ((jobNameYear !== 'NA') && (typeof jobNameYear === 'number' && new Date(jobNameYear)  >= new Date(currentYear)))
+        (lastDate !== 'Invalid Date' && year.length === 4 && lastDate >= new Date()) ||
+        ((jobNameYear !== 'NA') && (typeof jobNameYear === 'number' && !job.lastDate?.includes('/') && new Date(jobNameYear)  >= new Date(currentYear)))
       );
     });
 
