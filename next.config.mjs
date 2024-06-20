@@ -1,12 +1,12 @@
-// next.config.mjs
-import { createProxyMiddleware } from 'http-proxy-middleware';
+// next.config.js
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const nextConfig = {
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:3001/api/:path*',
+        destination: process.env.NETLIFY_FUNCTIONS_URL + '/api/:path*',
       },
     ];
   },
@@ -18,4 +18,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

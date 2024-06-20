@@ -6,8 +6,8 @@
   directory = "netlify/functions"
 
 [[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/next"
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
   status = 200
 
 [[plugins]]
