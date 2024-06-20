@@ -108,7 +108,7 @@ export default function Home() {
   });
 
   return (
-    <main className="container mx-auto p-4 border border-gray-300 dark:border-gray-700 rounded-lg shadow-md dark:bg-gray-900">
+    <main className="container min-h-96 mx-auto p-4 border border-gray-300 dark:border-gray-700 rounded-lg shadow-md dark:bg-gray-900">
       <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100 text-center">Latest Job Listings</h1>
       <div className="mb-4 flex justify-between items-center">
         <input
@@ -195,6 +195,7 @@ export default function Home() {
                   <input
                     type="checkbox"
                     checked={job.applied}
+                    className="cursor-pointer"
                     onChange={() => toggleApplied(job.url)}
                   />
                 </td>
@@ -204,7 +205,7 @@ export default function Home() {
         </table>
       </div>
       {loading && (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-20 flex justify-center">
           <div className="text-gray-900 dark:text-gray-100 text-lg font-semibold">Loading, Please wait...</div>
         </div>
       )}

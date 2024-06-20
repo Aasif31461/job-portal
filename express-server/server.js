@@ -11,146 +11,118 @@ app.get('/api/fetchJobs', async (req, res) => {
     const response = await axios.get(url);
     const html = response.data;
     const jobs = parseJobsFromHtml(html);
-
-    console.log("Job :"+jobs.length)
     const currentYear = new Date().getFullYear();
 
-    const filteredJobs = jobs.filter(job => {
-      const lastDate = parseDate(job.lastDate);
-      const year = getYearFromDateString(job.lastDate);
-      const jobNameYear = extractYearFromJobName(job.nameWithLink);
-      console.log(jobNameYear)
-      return (
-        (lastDate !== 'Invalid Date' && year.length === 4 && lastDate >= new Date()) ||
-        ((jobNameYear !== 'NA') && (typeof jobNameYear === 'number' && !job.lastDate?.includes('/') && new Date(jobNameYear)  >= new Date(currentYear)))
-      );
-    });
+    const filteredJobs = jobs.filter(job => isValidJob(job, currentYear));
 
-    console.log("Filtered Job lrngth: "+filteredJobs.length)
-
-    const jobDetailsPromises = filteredJobs.map(async (job) => {
+    const detailedJobs = await Promise.all(filteredJobs.map(async (job) => {
       const jobHtml = await axios.get(job.url).then(res => res.data);
       return {
         ...job,
-        applyLinks: fetchApplyLink(jobHtml),
+        applyLinks: extractLinks(jobHtml, 'Apply Online'),
+        lastDate: extractLastDate(jobHtml, job.lastDate),
         daysLeft: calculateDaysLeft(job.lastDate),
-        notificationLinks: fetchApplyNotificationLink(jobHtml),
-        publishedDate: fetchPublishedDate(jobHtml)
+        notificationLinks: extractLinks(jobHtml, 'Download Notification'),
+        publishedDate: extractPublishedDate(jobHtml)
       };
+    }));
+
+    const detailedJobsModified = detailedJobs.filter(job => {
+      const lastDate = parseDate(job.lastDate);
+      return ((lastDate == 'Invalid Date' && isDateWithinMonths(job.publishedDate, 3)) || (lastDate !== 'Invalid Date' && lastDate >= new Date()));
     });
 
-    const detailedJobs = await Promise.all(jobDetailsPromises);
+    detailedJobsModified.sort(compareByDaysLeft);
 
-    detailedJobs.sort((a, b) => {
-        const daysLeftA = a.daysLeft;
-        const daysLeftB = b.daysLeft;
-      
-        // Handle undefined and empty values
-        if (daysLeftA === undefined || daysLeftA === '') return 1;
-        if (daysLeftB === undefined || daysLeftB === '') return -1;
-      
-        // Compare numeric values
-        return daysLeftA - daysLeftB;
-      });
-      
-
-    res.json(detailedJobs);
+    res.json(detailedJobsModified);
   } catch (error) {
     console.error(error);
     res.status(500).send('An error occurred while fetching jobs');
   }
 });
 
-const parseDate = (dateString) => {
+function isDateWithinMonths(dateTimeStr, months) {
+  const dateStr = dateTimeStr.split(' ')[0];
+  const [day, month, year] = dateStr.split('/').map(Number);
+  const inputDate = new Date(year, month - 1, day);
+  const pastDate = new Date();
+  pastDate.setMonth(pastDate.getMonth() - months);
+  return inputDate > pastDate;
+}
+
+function parseDate(dateString) {
   const parts = dateString.split('/');
   if (parts.length !== 3) return new Date(NaN);
   return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-};
+}
 
-const getYearFromDateString = (dateString) => {
+function getYearFromDateString(dateString) {
   const parts = dateString.split('/');
   return parts[2] || 'NA';
-};
+}
 
-const extractYearFromJobName = (jobNameWithLink) => {
+function extractYearFromJobName(jobNameWithLink) {
   const yearMatch = jobNameWithLink.match(/\b(20\d{2})\b/);
   return yearMatch ? parseInt(yearMatch[1]) : 'NA';
-};
+}
 
-const fetchApplyLink = (html) => {
+function extractLinks(html, linkText) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
-  let applyLinks = [];
+  const links = [];
 
-  const trElements = document.querySelectorAll('tr');
-  trElements.forEach((tr) => {
+  document.querySelectorAll('tr').forEach(tr => {
     const tdElements = tr.querySelectorAll('td');
-    if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Apply Online')) {
-      const applyLinkElements = tdElements[1].querySelectorAll('a');
-      applyLinkElements.forEach((applyLinkElement) => {
-        const href = applyLinkElement.getAttribute('href') || '';
-        const text = applyLinkElement.textContent?.trim() || '';
-        applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
+    if (tdElements.length >= 2 && tdElements[0].textContent?.includes(linkText)) {
+      tdElements[1].querySelectorAll('a').forEach(a => {
+        links.push(`<a href="${a.href}" target="_blank">${a.textContent.trim()}</a>`);
       });
     }
   });
 
-  return applyLinks;
-};
+  return links;
+}
 
-const fetchApplyNotificationLink = (html) => {
+function extractLastDate(html, lastDate) {
+  if (lastDate && lastDate.includes('/')) return lastDate;
+
   const dom = new JSDOM(html);
   const document = dom.window.document;
-  let applyLinks = [];
+  let dateText = '';
 
-  const trElements = document.querySelectorAll('tr');
-  trElements.forEach((tr) => {
-    const tdElements = tr.querySelectorAll('td');
-    if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Download') && tdElements[0].textContent?.includes('Notification')) {
-      const applyLinkElements = tdElements[1].querySelectorAll('a');
-      applyLinkElements.forEach((applyLinkElement) => {
-        const href = applyLinkElement.getAttribute('href') || '';
-        const text = applyLinkElement.textContent?.trim() || '';
-        applyLinks.push(`<a href="${href}" target="_blank">${text}</a>`);
-      });
+  document.querySelectorAll('tr td ul li').forEach(li => {
+    if (li.textContent.includes('Last Date for Apply Online :') || li.textContent.includes('Last Date for Registration :')) {
+      const spanElement = li.querySelector('span');
+      dateText = spanElement ? spanElement.textContent.trim() : 'NA';
     }
   });
 
-  return applyLinks;
-};
+  return dateText.includes('/') ? dateText : lastDate;
+}
 
-const fetchPublishedDate = (html) => {
+function extractPublishedDate(html) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
   let formattedDate = '';
 
-  const tbody = document.querySelector('tbody');
-  if (!tbody) return formattedDate;
-
-  const trElements = tbody.querySelectorAll('tr');
-  trElements.forEach((tr) => {
+  document.querySelectorAll('tr').forEach(tr => {
     const tdElements = tr.querySelectorAll('td');
     if (tdElements.length >= 2 && tdElements[0].textContent?.includes('Post Date / Update:')) {
-      const dateString = tdElements[1].textContent?.trim() || '';
-      formattedDate = formatDateString(dateString);
+      formattedDate = formatDateString(tdElements[1].textContent.trim());
     }
   });
 
   return formattedDate;
-};
+}
 
-const formatDateString = (dateString) => {
-  const [datePart, timePart] = dateString.split(' | ');
-  const dateParts = datePart.split(' ');
-  const day = dateParts[0];
-  const month = getMonthNumber(dateParts[1]);
-  const year = dateParts[2];
-  const formattedDate = `${day}/${month}/${year}`;
-  const finalDate = `${formattedDate} ${timePart}`;
-  return finalDate;
-};
+function formatDateString(dateString) {
+  const [datePart] = dateString.split(' | ');
+  const [day, monthName, year] = datePart.split(' ');
+  const month = getMonthNumber(monthName);
+  return `${day}/${month}/${year}`;
+}
 
-const getMonthNumber = (monthName) => {
+function getMonthNumber(monthName) {
   const months = {
     'January': '01', 'February': '02', 'March': '03',
     'April': '04', 'May': '05', 'June': '06',
@@ -158,45 +130,52 @@ const getMonthNumber = (monthName) => {
     'October': '10', 'November': '11', 'December': '12'
   };
   return months[monthName] || '';
-};
+}
 
-const calculateDaysLeft = (lastDate) => {
+function calculateDaysLeft(lastDate) {
   if (!lastDate) return undefined;
-
-  const parts = lastDate.split('/');
-  if (parts.length !== 3) return undefined;
-
-  const endDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  const [day, month, year] = lastDate.split('/').map(Number);
+  const endDate = new Date(year, month - 1, day);
   const today = new Date();
   const diffTime = endDate.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  if (diffDays<0) return undefined;
-  return diffDays;
-};
+  return diffDays < 0 ? undefined : diffDays;
+}
 
-const parseJobsFromHtml = (html) => {
+function parseJobsFromHtml(html) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
   const jobContainer = document.getElementById('post');
 
   if (!jobContainer) return [];
 
-  const jobLists = Array.from(jobContainer.querySelectorAll('ul'));
-
-  if (jobLists.length === 0) return [];
-
-  return jobLists.map((list) => {
+  return Array.from(jobContainer.querySelectorAll('ul')).map(list => {
     const listItem = list.querySelector('li > a');
     const nameWithLink = listItem?.outerHTML || '';
     const url = listItem.href;
-    // const lastDateElement = list.querySelector('li span');
-    // const lastDate = lastDateElement ? lastDateElement.innerHTML.trim() : '';
     const lastDateMatch = list.textContent?.match(/Last Date : (.*)/);
-    const lastDate = lastDateMatch ? lastDateMatch[1].trim() : 'NA'; // Use the matched string
-
+    const lastDate = lastDateMatch ? lastDateMatch[1].trim() : 'NA';
     return { url, nameWithLink, lastDate };
-  }).filter((job) => job !== null);
-};
+  }).filter(job => job !== null);
+}
+
+function isValidJob(job, currentYear) {
+  const lastDate = parseDate(job.lastDate);
+  const year = getYearFromDateString(job.lastDate);
+  const jobNameYear = extractYearFromJobName(job.nameWithLink);
+  return (
+    (lastDate !== 'Invalid Date' && year.length === 4 && lastDate >= new Date()) ||
+    (jobNameYear !== 'NA' && typeof jobNameYear === 'number' && !job.lastDate?.includes('/') && jobNameYear >= currentYear)
+  );
+}
+
+function compareByDaysLeft(a, b) {
+  const daysLeftA = a.daysLeft;
+  const daysLeftB = b.daysLeft;
+  if (!daysLeftA) return 1;
+  if (!daysLeftB) return -1;
+  return daysLeftA - daysLeftB;
+}
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
