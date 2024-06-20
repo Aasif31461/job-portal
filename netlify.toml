@@ -4,6 +4,9 @@
 
 [functions]
   directory = "netlify/functions"
+
+  # Set the timeout for all functions
+  [functions.constants]
   timeout = 30
 
 [[redirects]]
