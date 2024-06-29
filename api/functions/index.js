@@ -1,20 +1,27 @@
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
 
-exports.handler = async function(event, context) {
-  const startTime = Date.now();
+module.exports = async function (context, req) {
   try {
     const url = 'https://www.sarkariresult.com/latestjob/';
     const response = await axios.get(url);
-    console.log('Fetched HTML:', response.data.substring(0, 100));
     const html = response.data;
     const jobs = parseJobsFromHtml(html);
     const currentYear = new Date().getFullYear();
 
     const filteredJobs = jobs.filter(job => isValidJob(job, currentYear));
-    console.log(`Filtered ${filteredJobs.length} jobs`);
 
-    const detailedJobs = await fetchJobDetailsInBatches(filteredJobs, 5);
+    const detailedJobs = await Promise.all(filteredJobs.map(async (job) => {
+      const jobHtml = await axios.get(job.url).then(res => res.data);
+      return {
+        ...job,
+        applyLinks: extractLinks(jobHtml, 'Apply Online'),
+        lastDate: extractLastDate(jobHtml, job.lastDate),
+        daysLeft: calculateDaysLeft(job.lastDate),
+        notificationLinks: extractLinks(jobHtml, 'Download Notification'),
+        publishedDate: extractPublishedDate(jobHtml)
+      };
+    }));
 
     const detailedJobsModified = detailedJobs.filter(job => {
       const lastDate = parseDate(job.lastDate);
@@ -23,17 +30,15 @@ exports.handler = async function(event, context) {
 
     detailedJobsModified.sort(compareByDaysLeft);
 
-    console.log(`Processed jobs in ${Date.now() - startTime}ms`);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(detailedJobsModified),
+    context.res = {
+      status: 200,
+      body: detailedJobsModified
     };
   } catch (error) {
     console.error(error);
-    return {
-      statusCode: 500,
-      body: 'An error occurred while fetching jobs',
+    context.res = {
+      status: 500,
+      body: 'An error occurred while fetching jobs'
     };
   }
 };
@@ -57,8 +62,6 @@ async function fetchJobDetailsInBatches(jobs, batchSize) {
   }
   return detailedJobs;
 }
-
-// Utility functions
 
 function isDateWithinMonths(dateTimeStr, months) {
     const dateStr = dateTimeStr.split(' ')[0];
