@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"next dev\" \"npm run express\"",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "express": "node express-server/server.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "autoprefixer": "^10.4.19",
@@ -16,20 +15,16 @@
     "http-proxy-middleware": "^3.0.0",
     "jsdom": "^24.1.0",
     "lodash": "^4.17.21",
-    "next": "^13.0.0",
-    "xlsx": "^0.18.5",
-    "tailwindcss": "^3.4.4"
+    "next": "^14.0.0",
+    "tailwindcss": "^3.4.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.3.3",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "^4.17.5",
-    "@types/node": "^16",
+    "@types/node": "^18",
     "@types/react": "18.3.3",
-    "typescript": "5.5.2",
-    "tailwindcss": "^3.4.4"
-  },
-  "engines": {
-    "node": ">=16.0.0"
+    "typescript": "5.5.2"
   }
 }
