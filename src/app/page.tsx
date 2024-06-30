@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -40,12 +39,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const appliedJobs = jobs.reduce((acc:any, job) => {
-      acc[job.url] = job.applied || false;
-      return acc;
-    }, {});
-    localStorage.setItem('appliedJobs', JSON.stringify(appliedJobs));
-  }, [jobs]);
+    if (!loading) {
+      const appliedJobs = jobs.reduce((acc: any, job) => {
+        if (job.applied) {
+          acc[job.url] = true;
+        }
+        return acc;
+      }, {});
+      localStorage.setItem('appliedJobs', JSON.stringify(appliedJobs));
+    }
+  }, [jobs, loading]);
 
   const handleSort = (key: keyof Job) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -90,7 +93,7 @@ export default function Home() {
 
   const sortedJobs = [...jobs];
   if (sortConfig !== null) {
-    sortedJobs.sort((a:any, b:any) => {
+    sortedJobs.sort((a: any, b: any) => {
       if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
       if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
