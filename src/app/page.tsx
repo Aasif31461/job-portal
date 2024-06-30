@@ -103,7 +103,7 @@ export default function Home() {
       job.nameWithLink.toLowerCase().includes(token) ||
       job.publishedDate?.toLowerCase().includes(token) ||
       job.lastDate.toLowerCase().includes(token) ||
-      (job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) && job.daysLeft.toString().includes(token))
+      (job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) && job.daysLeft?.toString().includes(token))
     );
   });
 
