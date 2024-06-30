@@ -70,26 +70,76 @@ export default function Home() {
   };
 
   const exportToExcel = () => {
-    const exportData = jobs.map(job => ({
-      '#': '',
-      'Job Name': { v: job.nameWithLink.replace(/<[^>]+>/g, ''), l: { Target: job.url, Tooltip: job.nameWithLink.replace(/<[^>]+>/g, '') } },
-      'Post Date': job.publishedDate !== 'NA' ? job.publishedDate : '',
-      'Last Date to Apply': job.lastDate !== 'NA' ? job.lastDate : '',
-      'Days Left': job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) ? job.daysLeft : '',
-      'Notifications': job.notificationLinks ? job.notificationLinks.map(link => link.replace(/<[^>]+>/g, '')).join(': ') : '',
-      'Apply': job.applyLinks ? job.applyLinks.map(link => link.replace(/<[^>]+>/g, '')).join(': ') : '',
-      'Applied': job.applied ? 'Yes' : 'No',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData, {
+    const extractLinkInfo = (htmlString: string) => {
+      const textMatch = htmlString?.match(/>(.*?)</);
+      const linkMatch = htmlString?.match(/href="(.*?)"/);
+      return textMatch && linkMatch ? { v: textMatch[1], l: { Target: linkMatch[1], Tooltip: textMatch[1] } } : null;
+    };
+  
+    const flattenedExportData: any[] = [];
+    
+    jobs.forEach((job, index) => {
+      const notifications = job.notificationLinks ? job.notificationLinks.map(extractLinkInfo).filter(Boolean) : [];
+      const applyLinks = job.applyLinks ? job.applyLinks.map(extractLinkInfo).filter(Boolean) : [];
+      
+      const maxLinks = Math.max(notifications.length, applyLinks.length);
+      
+      for (let i = 0; i < maxLinks; i++) {
+        if (i === 0) {
+          flattenedExportData.push({
+            '#': index + 1,
+            'Job Name': { v: job.nameWithLink.replace(/<[^>]+>/g, ''), l: { Target: job.url, Tooltip: job.nameWithLink.replace(/<[^>]+>/g, '') } },
+            'Post Date': job.publishedDate !== 'NA' ? job.publishedDate : '',
+            'Last Date to Apply': job.lastDate !== 'NA' ? job.lastDate : '',
+            'Days Left': job.daysLeft !== undefined && !Number.isNaN(job.daysLeft) ? job.daysLeft : '',
+            'Notifications': notifications[i] ? notifications[i]?.v : '',
+            'Apply': applyLinks[i] ? applyLinks[i]?.v : '',
+            'Applied': job.applied ? 'Yes' : 'No',
+          });
+        } else {
+          flattenedExportData.push({
+            '#': '',
+            'Job Name': '',
+            'Post Date': '',
+            'Last Date to Apply': '',
+            'Days Left': '',
+            'Notifications': notifications[i] ? notifications[i]?.v : '',
+            'Apply': applyLinks[i] ? applyLinks[i]?.v : '',
+            'Applied': '',
+          });
+        }
+      }
+    });
+  
+    const worksheet = XLSX.utils.json_to_sheet(flattenedExportData, {
       cellStyles: true,
       header: ['#', 'Job Name', 'Post Date', 'Last Date to Apply', 'Days Left', 'Notifications', 'Apply', 'Applied'],
     });
-
+  
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Jobs');
+  
+    // Add hyperlinks manually
+    let currentRow = 2; // Start after the header row
+    jobs.forEach((job) => {
+      const notifications = job.notificationLinks ? job.notificationLinks.map(extractLinkInfo).filter(Boolean) : [];
+      const applyLinks = job.applyLinks ? job.applyLinks.map(extractLinkInfo).filter(Boolean) : [];
+  
+      const maxLinks = Math.max(notifications.length, applyLinks.length);
+      
+      for (let i = 0; i < maxLinks; i++) {
+        if (notifications[i]) {
+          worksheet[`F${currentRow}`] = { v: notifications[i]?.v, l: notifications[i]?.l };
+        }
+        if (applyLinks[i]) {
+          worksheet[`G${currentRow}`] = { v: applyLinks[i]?.v, l: applyLinks[i]?.l };
+        }
+        currentRow++;
+      }
+    });
+  
     XLSX.writeFile(workbook, 'jobs.xlsx');
-  };
+  };  
 
   const sortedJobs = [...jobs];
   if (sortConfig !== null) {
