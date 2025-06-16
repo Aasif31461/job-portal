@@ -23,7 +23,7 @@ export default function Home() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await fetch("https://sarkariportal.azurewebsites.net/api/fetchJobs");
+        const response = await fetch("http://localhost:3002/api/fetchJobs");
         if (!response.ok) throw new Error('Failed to fetch jobs');
         const jobsData: Job[] = await response.json();
         const appliedJobs = JSON.parse(localStorage.getItem('appliedJobs') || '{}');
@@ -211,8 +211,8 @@ export default function Home() {
                 Days Left
                 {sortConfig?.key === 'daysLeft' && (sortConfig.direction === 'asc' ? ' ▲' : ' ▼')}
               </th>
-              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Notifications</th>
-              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Apply</th>
+              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Links</th>
+              <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Apply Online</th>
               <th className="px-4 py-2 border-b-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
                 Applied
                 <span className="ml-2 flex items-center cursor-pointer">
