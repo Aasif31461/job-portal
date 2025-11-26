@@ -1,0 +1,15 @@
+LICENSE
+
+This project is licensed for Non-Commercial and Educational Use Only.
+
+Terms and Conditions:
+
+1. Non-Commercial Use: You are permitted to use, copy, and modify this software for personal, non-commercial purposes only.
+
+2. No Selling: You may not sell, rent, lease, or distribute this software or any derivative works for any form of compensation.
+
+3. Educational Purpose: This software is intended solely for educational purposes to demonstrate web scraping and React application development.
+
+4. Scraping Disclaimer: This application scrapes data from third-party sources. This is done for educational demonstration only. The developers of this project do not claim ownership of the scraped data. Users are responsible for ensuring their use of this software complies with the terms of service of any scraped websites.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
