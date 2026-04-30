@@ -24,30 +24,44 @@ import {
 
 
 // --- Constants ---
-const TARGET_URL = 'https://www.sarkariresultcm.in/latest-jobs/';
+const TARGET_URL = import.meta.env.VITE_TARGET_URL || 'https://sarkariresult.com.cm/latest-jobs/';
 
 // --- Helper Functions ---
 
 const parseDateString = (dateStr) => {
+  if (!dateStr || dateStr === 'NA') return null;
+  const cleanStr = dateStr.replace(/Last Date\s*[:|-]\s*/i, '').trim();
+
   try {
     // Handle dd/mm/yyyy
-    let match = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    let match = cleanStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (match) {
       return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
     }
 
-    // Handle dd Month yyyy (e.g., 30 November 2025)
-    match = dateStr.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/);
+    // Handle dd Month yyyy (e.g., 30 November 2025 or 11 June2026)
+    match = cleanStr.match(/(\d{1,2})\s+([a-zA-Z]+)\s*(\d{4})/);
+    const monthMap = {
+      'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+      'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11,
+      'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+    };
+
     if (match) {
-      const monthMap = {
-        'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
-        'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11,
-        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
-      };
       const monthStr = match[2].toLowerCase();
       const monthIndex = monthMap[monthStr];
       if (monthIndex !== undefined) {
         return new Date(parseInt(match[3]), monthIndex, parseInt(match[1]));
+      }
+    }
+
+    // Handle Month yyyy (e.g., March 2026) -> assume last day of that month
+    match = cleanStr.match(/^([a-zA-Z]+)\s+(\d{4})$/);
+    if (match) {
+      const monthStr = match[1].toLowerCase();
+      const monthIndex = monthMap[monthStr];
+      if (monthIndex !== undefined) {
+        return new Date(parseInt(match[2]), monthIndex + 1, 0); // Last day of month
       }
     }
 
@@ -158,6 +172,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedJob, setSelectedJob] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [progress, setProgress] = useState(0);
   const [sortConfig, setSortConfig] = useState({ key: 'daysLeft', direction: 'asc' });
@@ -212,26 +227,31 @@ export default function App() {
       const allLinks = Array.from(doc.querySelectorAll('a'));
       const parsedJobs = [];
       const seenUrls = new Set();
+      
+      const jobLinks = Array.from(doc.querySelectorAll('.latest-posts-last-date a'));
+      const linksToParse = jobLinks.length > 0 ? jobLinks : allLinks;
 
-      allLinks.forEach((link, index) => {
+      linksToParse.forEach((link, index) => {
         const text = link.textContent?.trim() || '';
         const href = link.getAttribute('href');
 
-        if (!href || text.length < 10 || seenUrls.has(href)) return;
+        if (!href || text.length < 5 || seenUrls.has(href)) return;
 
-        const lowerText = text.toLowerCase();
-        const isLikelyJob = lowerText.includes('recruitment') || lowerText.includes('online form') || lowerText.includes('vacancy') || lowerText.includes('apply');
-        if (!isLikelyJob) return;
+        if (jobLinks.length === 0) {
+            const lowerText = text.toLowerCase();
+            const isLikelyJob = lowerText.includes('recruitment') || lowerText.includes('online form') || lowerText.includes('vacancy') || lowerText.includes('apply');
+            if (!isLikelyJob) return;
+        }
 
         let dateStr = 'NA';
         let dateObj = null;
 
         const parentText = link.parentElement?.textContent || '';
-        const dateMatch = parentText.match(/Last Date\s*[:|-]\s*(\d{2}\/\d{2}\/\d{4})/i) ||
-          text.match(/Last Date\s*[:|-]\s*(\d{2}\/\d{2}\/\d{4})/i);
+        const dateMatch = parentText.match(/Last Date\s*[:|-]\s*(.+)/i) ||
+          text.match(/Last Date\s*[:|-]\s*(.+)/i);
 
         if (dateMatch) {
-          dateStr = dateMatch[1];
+          dateStr = dateMatch[1].trim();
           dateObj = parseDateString(dateStr);
         }
 
@@ -244,10 +264,12 @@ export default function App() {
         }
 
         seenUrls.add(fullUrl);
+        
+        let jobName = text.replace(/[-–]?\s*Last Date.*$/i, '').trim();
 
         parsedJobs.push({
           id: `job-${index}`,
-          name: text.replace(/Last Date.*$/i, '').trim(),
+          name: jobName,
           url: fullUrl,
           lastDate: dateStr,
           lastDateObj: dateObj ? dateObj.toISOString() : null,
@@ -317,28 +339,15 @@ export default function App() {
 
           const extractedLinks = [];
           const rows = Array.from(doc.querySelectorAll('tr'));
-          let startCapturing = false;
 
           rows.forEach(row => {
-            const rowText = row.textContent?.toLowerCase() || '';
-
-            // Logic: Only start capturing after seeing the "Important Links" header
-            if (rowText.includes('important link')) {
-              startCapturing = true;
-              return; // Skip the header row itself
-            }
-
-            // If we haven't hit the header yet, check if this is a "rogue" table that doesn't use the header
-            // But if we are in "strict" mode (implied by user request), we wait.
-            // However, to be safe against pages WITHOUT headers, we can default to capture but filter heavily.
-            // Current strategy: Wait for header. If no header found by end, we might run a fallback pass.
-
-            if (!startCapturing) return;
-
             const cells = row.querySelectorAll('td');
             if (cells.length >= 2) {
               const rawLabel = cells[0].textContent?.trim() || 'Link';
               const labelLower = rawLabel.toLowerCase();
+
+              // Prevent grabbing "Latest Posts" or extremely long labels
+              if (rawLabel.length > 80 || labelLower.includes('latest posts') || labelLower.includes('related posts')) return;
 
               // Double check: If label looks like "WhatsApp" or "Telegram" or "Sarkari Result toolbox", ignore it
               if (labelLower.includes('whatsapp') || labelLower.includes('telegram') || labelLower.includes('instagram') || labelLower.includes('facebook') || labelLower.includes('join') || labelLower.includes('sarkari result toolbox')) {
@@ -369,6 +378,65 @@ export default function App() {
               }
             }
           });
+
+          // Extract info blocks (Important Dates, Fees, Age, etc.)
+          const infoBlocks = [];
+          
+          const tables = Array.from(doc.querySelectorAll('table'));
+          tables.forEach(table => {
+            const tableText = table.textContent?.toLowerCase() || '';
+            if (tableText.includes('latest posts') || tableText.includes('apply online') || tableText.includes('useful important links') || tableText.includes('whatsapp') || tableText.includes('telegram') || tableText.includes('important question')) return;
+            
+            const trs = Array.from(table.querySelectorAll('tr'));
+            if (trs.length < 2) return;
+            
+            let header = trs[0].textContent?.trim() || '';
+            let tRows = [];
+            for (let i = 1; i < trs.length; i++) {
+              const tds = Array.from(trs[i].querySelectorAll('td')).map(td => td.textContent?.trim() || '');
+              if (tds.length > 0 && tds.some(t => t.length > 0)) tRows.push(tds);
+            }
+            
+            if (tRows.length > 0) {
+              infoBlocks.push({ type: 'table', title: header, rows: tRows });
+            }
+          });
+
+          const headers = Array.from(doc.querySelectorAll('h4, h5, h6'));
+          headers.forEach(h => {
+            const text = h.textContent?.trim() || '';
+            if (text.includes('Important Dates') || text.includes('Application Fee') || text.includes('Age Limit') || text.includes('Total Post')) {
+              let next = h.nextElementSibling;
+              if (!next && h.parentElement) next = h.parentElement.nextElementSibling;
+              
+              if (next) {
+                const lis = Array.from(next.querySelectorAll('li'));
+                if (lis.length > 0) {
+                  infoBlocks.push({ type: 'list', title: text, items: lis.map(li => li.textContent?.trim() || '') });
+                } else {
+                  const divText = next.textContent?.trim() || '';
+                  if (divText) {
+                    infoBlocks.push({ type: 'text', title: text, text: divText });
+                  }
+                }
+              }
+            }
+          });
+
+          // Sort infoBlocks so Important Dates, Application Fee, Age Limit, and Total Post appear first
+          infoBlocks.sort((a, b) => {
+            const getRank = (title) => {
+              const t = title.toLowerCase();
+              if (t.includes('important date')) return 1;
+              if (t.includes('application fee')) return 2;
+              if (t.includes('age limit')) return 3;
+              if (t.includes('total post') || t.includes('vacancy details')) return 4;
+              return 5;
+            };
+            return getRank(a.title) - getRank(b.title);
+          });
+
+          updates.infoBlocks = infoBlocks;
 
           // Fallback: If strict parsing found NOTHING (maybe page has no header?), 
           // try loose parsing but exclude social junk
@@ -414,7 +482,7 @@ export default function App() {
   };
 
   const activeList = useMemo(() => {
-    let result = scrapedJobs.filter(job => !appliedJobsMap[job.url] && (job.daysLeft === undefined || job.daysLeft >= 0));
+    let result = scrapedJobs.filter(job => !appliedJobsMap[job.url] && job.daysLeft !== undefined && job.daysLeft >= 0);
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -581,14 +649,12 @@ export default function App() {
                         <td className="px-6 py-4 text-sm text-gray-600 text-center">{idx + 1}</td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
-                            <a
-                              href={job.url}
-                              target="_blank"
-                              rel="noopener"
-                              className="font-medium text-gray-200 group-hover:text-blue-400 transition-colors line-clamp-2 text-base"
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSelectedJob(job); }}
+                              className="font-medium text-gray-200 hover:text-blue-400 transition-colors text-left line-clamp-2 text-base focus:outline-none"
                             >
                               {job.name}
-                            </a>
+                            </button>
                             <div className="flex items-center gap-3 text-xs text-gray-500">
                               <span>Last Date: <span className="text-gray-400">{job.lastDate}</span></span>
                             </div>
@@ -598,17 +664,24 @@ export default function App() {
                           <StatusBadge days={job.daysLeft} status={job.status} />
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 items-center">
                             {job.importantLinks.length > 0 ? (
                               job.importantLinks.map((link, i) => (
                                 <ActionButton key={i} {...link} href={link.url} />
                               ))
-                            ) : job.isDetailsLoaded ? (
-                              <ActionButton type="other" label="Details" href={job.url} />
-                            ) : (
-                              <span className="text-xs text-gray-600 flex items-center gap-2 animate-pulse">
+                            ) : job.isDetailsLoaded ? null : (
+                              <span className="text-xs text-gray-600 flex items-center gap-2 animate-pulse mr-2">
                                 <Loader2 className="w-3 h-3 animate-spin" /> Loading links...
                               </span>
+                            )}
+                            {job.isDetailsLoaded && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedJob(job); }}
+                                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 border border-blue-500/20 transition-all flex items-center gap-1 ml-1"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  View Details
+                                </button>
                             )}
                           </div>
                         </td>
@@ -685,6 +758,139 @@ export default function App() {
         </section>
 
       </div>
+
+      {/* Modal Popup */}
+      {selectedJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedJob(null)}>
+          <div 
+            className="bg-[#0f1117] border border-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative p-6 shadow-2xl custom-scrollbar"
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800"
+              onClick={() => setSelectedJob(null)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <h2 className="text-2xl font-bold text-white mb-3 pr-10">{selectedJob.name}</h2>
+            
+            <div className="flex flex-wrap items-center gap-3 mb-8 pb-4 border-b border-gray-800">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedJob.daysLeft !== undefined && selectedJob.daysLeft <= 3 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                {selectedJob.daysLeft !== undefined ? (selectedJob.daysLeft === 0 ? 'Last Day Today' : `${selectedJob.daysLeft} days left`) : 'Available Soon'}
+              </span>
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-800 text-gray-300 border border-gray-700">
+                Deadline: {selectedJob.lastDate}
+              </span>
+              {appliedJobsMap[selectedJob.url] && (
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> Applied
+                </span>
+              )}
+            </div>
+
+            {!selectedJob.isDetailsLoaded ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <p className="text-lg">Loading job details...</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {selectedJob.importantLinks && selectedJob.importantLinks.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <LinkIcon className="w-5 h-5 text-blue-400" />
+                      Important Links
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedJob.importantLinks.map((link, i) => (
+                        <a 
+                          key={i} 
+                          href={link.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 rounded-xl bg-gray-900/50 border border-gray-800 hover:bg-gray-800 hover:border-gray-700 transition-all group"
+                        >
+                          <span className="font-medium text-gray-200 group-hover:text-blue-400 transition-colors line-clamp-1">{link.label}</span>
+                          <ExternalLink className="w-4 h-4 text-gray-500 group-hover:text-blue-400 flex-shrink-0 ml-2" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedJob.infoBlocks && selectedJob.infoBlocks.length > 0 ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {selectedJob.infoBlocks.map((block, i) => {
+                      const isHighlight = block.title.toLowerCase().includes('important date') || block.title.toLowerCase().includes('application fee');
+                      return (
+                        <div key={i} className={`rounded-xl p-5 border ${isHighlight ? 'bg-blue-900/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'bg-gray-900/40 border-gray-800'} ${block.type === 'table' ? 'lg:col-span-2' : ''}`}>
+                          <h4 className={`font-semibold mb-4 pb-2 border-b ${isHighlight ? 'text-blue-300 border-blue-500/30' : 'text-blue-400 border-gray-800/50'}`}>
+                            {block.title}
+                          </h4>
+                          {block.type === 'list' && (
+                            <ul className={`list-disc pl-5 space-y-2 text-sm marker:text-gray-600 ${isHighlight ? 'text-blue-100/90' : 'text-gray-300'}`}>
+                              {block.items.map((item, j) => <li key={j}>{item}</li>)}
+                            </ul>
+                          )}
+                          {block.type === 'text' && (
+                            <p className={`text-sm whitespace-pre-wrap leading-relaxed ${isHighlight ? 'text-blue-100/90 font-medium' : 'text-gray-300'}`}>{block.text}</p>
+                          )}
+                          {block.type === 'table' && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm text-left">
+                                <tbody>
+                                  {block.rows.map((r, j) => (
+                                    <tr key={j} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/20">
+                                      {r.map((c, k) => (
+                                        <td key={k} className={`py-3 pr-4 text-gray-300 align-top ${k === 0 ? 'font-medium text-gray-400 w-1/4' : ''}`}>{c}</td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-gray-900/40 rounded-xl p-8 border border-gray-800 text-center">
+                    <FileText className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                    <p className="text-gray-500 font-medium">No additional details extracted</p>
+                    <p className="text-sm text-gray-600 mt-1">You can view the full details on the original website.</p>
+                  </div>
+                )}
+                
+                <div className="pt-6 mt-8 border-t border-gray-800 flex justify-between items-center sticky bottom-0 bg-[#0f1117] p-4 -m-6 rounded-b-2xl border-t border-gray-800/80 backdrop-blur-md bg-[#0f1117]/90 z-10">
+                  <button
+                    onClick={() => {
+                      markAsApplied(selectedJob);
+                      setSelectedJob(null);
+                    }}
+                    className={`px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 ${appliedJobsMap[selectedJob.url] ? 'bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20 border border-emerald-500/20'}`}
+                    disabled={appliedJobsMap[selectedJob.url]}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    {appliedJobsMap[selectedJob.url] ? 'Applied' : 'Mark as Applied'}
+                  </button>
+
+                  <a 
+                    href={selectedJob.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 shadow-lg shadow-blue-900/20 transition-all flex items-center gap-2"
+                  >
+                    <Globe className="w-4 h-4" />
+                    Original Page
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
